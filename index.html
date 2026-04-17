@@ -61,6 +61,7 @@
 
   <div class="relative z-10 flex w-full h-full p-4 md:p-8 gap-6 max-w-[1600px] mx-auto overflow-hidden">
     
+    <!-- DESKTOP NAVIGATION -->
     <nav class="hidden md:flex flex-col w-72 glass-panel rounded-3xl p-8 h-full shadow-2xl flex-shrink-0 select-none">
       <div class="flex items-center gap-4 mb-12">
         <div class="w-10 h-10 rounded-xl bg-accent flex items-center justify-center shadow-[0_0_20px_rgba(94,106,210,0.5)]">
@@ -68,13 +69,16 @@
         </div>
         <div>
           <h2 class="font-semibold tracking-tight text-lg leading-tight select-text-area">Repo Pack</h2>
-          <p class="text-xs text-white/40 font-mono select-text-area">v3.0.0-LOCAL</p>
+          <p class="text-xs text-white/40 font-mono select-text-area">v3.0.0-PRO</p>
         </div>
       </div>
 
       <div class="flex flex-col gap-2 flex-grow">
         <button data-nav="home" class="nav-btn group flex items-center gap-3 px-5 py-4 rounded-xl text-sm font-medium transition-all text-white/60 hover:bg-white/5 hover:text-white active touch-manipulation">
           <i data-lucide="hard-drive" class="w-4 h-4 transition-transform group-hover:scale-110"></i> Local Scan
+        </button>
+        <button data-nav="remote" class="nav-btn group flex items-center gap-3 px-5 py-4 rounded-xl text-sm font-medium transition-all text-white/60 hover:bg-white/5 hover:text-white touch-manipulation">
+          <i data-lucide="cloud" class="w-4 h-4 transition-transform group-hover:-translate-y-1"></i> Remote Fetch
         </button>
         <button data-nav="rules" class="nav-btn group flex items-center gap-3 px-5 py-4 rounded-xl text-sm font-medium transition-all text-white/60 hover:bg-white/5 hover:text-white touch-manipulation">
           <i data-lucide="shield" class="w-4 h-4 transition-transform group-hover:rotate-12"></i> Exclusion Rules
@@ -88,18 +92,20 @@
         </div>
         <div class="flex items-center gap-2">
           <i data-lucide="cpu" class="w-3 h-3 text-accent"></i>
-          <span class="text-accent tracking-wider">ENGINE: LOCAL DISK</span>
+          <span class="text-accent tracking-wider">ENGINE: DUAL MODE</span>
         </div>
       </div>
     </nav>
 
+    <!-- CONTENT AREA -->
     <main class="flex-1 relative h-full safe-pb md:pb-0 overflow-y-auto rounded-3xl">
       
+      <!-- ROUTE: LOCAL SCAN -->
       <section id="route-home" class="route-view active flex-col justify-center items-center min-h-full w-full max-w-2xl mx-auto px-2">
         <div id="home-card" class="glass-panel rounded-3xl p-6 md:p-12 w-full transform-gpu transition-all duration-500 hover:shadow-[0_32px_80px_rgba(0,0,0,0.8)]">
           
           <div class="text-center mb-10 select-text-area">
-            <h1 class="text-3xl md:text-4xl font-semibold tracking-tight mb-3">Compile Repository</h1>
+            <h1 class="text-3xl md:text-4xl font-semibold tracking-tight mb-3">Compile Local Directory</h1>
             <p class="text-white/60 text-sm md:text-base leading-relaxed">Select a local folder. Compile its contents into a singular, LLM-digestible payload. Operates entirely offline.</p>
           </div>
 
@@ -159,6 +165,73 @@
         </div>
       </section>
 
+      <!-- ROUTE: REMOTE FETCH -->
+      <section id="route-remote" class="route-view flex-col justify-center items-center min-h-full w-full max-w-2xl mx-auto px-2">
+        <div id="remote-card" class="glass-panel rounded-3xl p-6 md:p-12 w-full transform-gpu transition-all duration-500 hover:shadow-[0_32px_80px_rgba(0,0,0,0.8)]">
+          
+          <div class="text-center mb-10 select-text-area">
+            <h1 class="text-3xl md:text-4xl font-semibold tracking-tight mb-3">Fetch Remote Repository</h1>
+            <p class="text-white/60 text-sm md:text-base leading-relaxed">Provide a GitHub URL. Stream and compile the codebase via your Railway proxy. Bypasses client memory limits entirely.</p>
+          </div>
+
+          <div id="remote-view-input" class="flex flex-col gap-6">
+            <div class="flex flex-col gap-2">
+              <label class="text-xs font-mono text-white/50 pl-2 uppercase tracking-wider">GitHub Repository Target</label>
+              <input type="text" id="input-repo-url" placeholder="e.g. facebook/react" class="w-full bg-black/40 border border-white/20 focus:border-accent outline-none text-white px-5 py-4 rounded-xl transition-colors font-mono text-sm touch-manipulation shadow-inner" autocomplete="off" autocorrect="off" autocapitalize="off">
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-xs font-mono text-white/50 pl-2 uppercase tracking-wider">Personal Access Token (Optional)</label>
+              <input type="password" id="input-repo-token" placeholder="ghp_..." class="w-full bg-black/40 border border-white/20 focus:border-accent outline-none text-white px-5 py-4 rounded-xl transition-colors font-mono text-sm touch-manipulation shadow-inner">
+            </div>
+            <button id="btn-fetch-remote" class="w-full bg-accent text-white font-medium py-5 rounded-xl mt-2 flex items-center justify-center gap-3 transition-all hover:bg-accentHover shadow-[0_4px_15px_rgba(94,106,210,0.4)] hover:-translate-y-1 select-none touch-manipulation">
+              <i data-lucide="cloud-lightning" class="w-5 h-5"></i>
+              <span class="tracking-wide text-base">Stream Payload</span>
+            </button>
+          </div>
+
+          <div id="remote-view-progress" class="hidden flex-col items-center py-8">
+            <div class="grid place-items-center mb-8">
+              <div class="col-start-1 row-start-1 w-20 h-20 rounded-full border-4 border-white/5 border-t-accent animate-spin"></div>
+              <div class="col-start-1 row-start-1 flex items-center justify-center">
+                <i data-lucide="cloud-lightning" class="w-6 h-6 text-accent animate-pulse"></i>
+              </div>
+            </div>
+            <h3 class="text-xl font-medium mb-2 select-text-area">Streaming Data...</h3>
+            <p id="remote-progress-sub" class="text-sm text-accent font-mono mb-8 h-5 overflow-hidden text-ellipsis whitespace-nowrap max-w-full px-4 select-text-area">Connecting to Railway proxy...</p>
+          </div>
+
+          <div id="remote-view-success" class="hidden flex-col items-center py-6 text-center">
+            <div class="w-24 h-24 rounded-full bg-accent/10 border border-accent flex items-center justify-center mb-8 shadow-[0_0_40px_rgba(94,106,210,0.3)] animate-pulse-glow">
+              <i data-lucide="check" class="w-10 h-10 text-accent"></i>
+            </div>
+            <h3 class="text-2xl font-semibold mb-3 select-text-area">Payload Retrieved</h3>
+            <p class="text-white/60 text-sm mb-10 select-text-area" id="remote-success-filename"></p>
+            
+            <div class="flex flex-col sm:flex-row gap-4 w-full">
+              <button id="btn-download-remote" class="flex-1 bg-accent text-white py-4 rounded-xl font-medium hover:bg-accentHover transition-all flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(94,106,210,0.4)] hover:-translate-y-1 select-none touch-manipulation">
+                <i data-lucide="download" class="w-5 h-5"></i> Download Payload
+              </button>
+              <button id="btn-reset-remote" class="px-8 py-4 border border-white/10 rounded-xl text-white/80 font-medium hover:bg-white/5 hover:text-white transition-all select-none touch-manipulation">
+                Reset
+              </button>
+            </div>
+          </div>
+
+          <div id="remote-view-error" class="hidden flex-col items-center py-6 text-center">
+            <div class="w-20 h-20 rounded-full bg-error/10 border border-error flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(210,94,94,0.2)]">
+              <i data-lucide="alert-triangle" class="w-8 h-8 text-error"></i>
+            </div>
+            <h3 class="text-xl font-semibold mb-4 text-white select-text-area">Connection Fault</h3>
+            <p id="remote-error-message" class="text-sm text-error/90 bg-error/10 border border-error/20 p-5 rounded-2xl w-full mb-8 break-words font-mono select-text-area"></p>
+            <button id="btn-reset-remote-error" class="w-full border border-white/10 rounded-xl py-4 text-white hover:bg-white/5 transition-colors font-medium select-none touch-manipulation">
+              Acknowledge & Return
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ROUTE: RULES -->
       <section id="route-rules" class="route-view flex-col justify-start items-center min-h-full w-full max-w-2xl mx-auto py-8 md:py-12 px-2">
         <div class="w-full mb-10 text-center md:text-left select-text-area">
           <h2 class="text-3xl font-semibold tracking-tight">Exclusion Constraints</h2>
@@ -191,8 +264,12 @@
               <i data-lucide="scale" class="w-4 h-4"></i> Memory Bounds
             </h3>
              <div class="flex items-center justify-between p-4 bg-black/30 border border-white/10 rounded-xl select-text-area">
-               <span class="text-sm font-medium">File Size Limit</span>
+               <span class="text-sm font-medium">Local Size Limit</span>
                <span class="font-mono text-accent">1.0 MB</span>
+             </div>
+             <div class="flex items-center justify-between p-4 bg-black/30 border border-white/10 rounded-xl mt-2 select-text-area">
+               <span class="text-sm font-medium">Remote Size Limit</span>
+               <span class="font-mono text-accent">2.0 MB</span>
              </div>
           </div>
         </div>
@@ -200,12 +277,19 @@
 
     </main>
 
+    <!-- MOBILE NAVIGATION -->
     <nav class="md:hidden fixed bottom-0 left-0 w-full glass-panel border-b-0 border-x-0 rounded-t-3xl flex justify-around p-2 z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] select-none">
       <button data-nav="home" class="nav-btn-mob flex flex-col items-center justify-center gap-1 w-20 h-16 rounded-2xl text-white/40 transition-all hover:text-white/80 active-mob touch-manipulation">
         <div class="indicator w-10 h-8 rounded-xl flex items-center justify-center transition-all bg-accent/20 text-accent">
           <i data-lucide="hard-drive" class="w-5 h-5"></i>
         </div>
-        <span class="text-[10px] font-medium tracking-wide mt-0.5">Scan</span>
+        <span class="text-[10px] font-medium tracking-wide mt-0.5">Local</span>
+      </button>
+      <button data-nav="remote" class="nav-btn-mob flex flex-col items-center justify-center gap-1 w-20 h-16 rounded-2xl text-white/40 transition-all hover:text-white/80 touch-manipulation">
+        <div class="indicator w-10 h-8 rounded-xl flex items-center justify-center transition-all">
+          <i data-lucide="cloud" class="w-5 h-5"></i>
+        </div>
+        <span class="text-[10px] font-medium tracking-wide mt-0.5">Remote</span>
       </button>
       <button data-nav="rules" class="nav-btn-mob flex flex-col items-center justify-center gap-1 w-20 h-16 rounded-2xl text-white/40 transition-all hover:text-white/80 touch-manipulation">
         <div class="indicator w-10 h-8 rounded-xl flex items-center justify-center transition-all">
@@ -217,6 +301,9 @@
   </div>
 
 <script>
+// Railway Backend Target
+const RAILWAY_PROXY_URL = 'https://repopack-production.up.railway.app';
+
 const AppState = {
   activeBlob: null,
   activeDirName: 'repository'
@@ -234,11 +321,7 @@ const EXCLUDED_EXTENSIONS = new Set([
 ]);
 
 function setupUI() {
-  try {
-    lucide.createIcons();
-  } catch(e) {
-    console.warn('Icons bypassed.');
-  }
+  try { lucide.createIcons(); } catch(e) { console.warn('Icons bypassed.'); }
   
   const extList = document.getElementById('extension-list');
   if (extList) {
@@ -394,18 +477,13 @@ function buildWebGL() {
   animate();
 }
 
-const ViewCtrl = {
+// Local UI Controller
+const LocalViewCtrl = {
   setState: (state) => {
     ['input', 'progress', 'success', 'error'].forEach(s => {
       const el = document.getElementById(`view-${s}`);
       if (el) el.style.display = (s === state) ? 'flex' : 'none';
     });
-    
-    try {
-      if (state === 'input' && typeof gsap !== 'undefined') {
-        gsap.fromTo('#home-card', { rotateX: 3, scale: 0.98 }, { rotateX: 0, scale: 1, duration: 0.6, ease: 'back.out(1.5)' });
-      }
-    } catch(e) {}
   },
   updateProgress: (msg, ratio) => {
     const sub = document.getElementById('progress-sub');
@@ -416,14 +494,7 @@ const ViewCtrl = {
   showError: (msg) => {
     const errEl = document.getElementById('error-message');
     if (errEl) errEl.textContent = msg;
-    ViewCtrl.setState('error');
-    
-    try {
-      if (typeof gsap !== 'undefined') {
-        gsap.from('#view-error', { y: 20, opacity: 0, duration: 0.4, ease: 'power2.out' });
-        gsap.fromTo('#home-card', { x: -5 }, { x: 5, duration: 0.1, yoyo: true, repeat: 3, ease: 'linear', clearProps: 'x' });
-      }
-    } catch(e) {}
+    LocalViewCtrl.setState('error');
   },
   showSuccess: (meta) => {
     const badges = [];
@@ -433,14 +504,31 @@ const ViewCtrl = {
     
     const metaEl = document.getElementById('success-meta');
     if (metaEl) metaEl.innerHTML = badges.join('');
-    
-    ViewCtrl.setState('success');
-    
-    try {
-      if (typeof gsap !== 'undefined') {
-        gsap.from('#view-success', { scale: 0.9, opacity: 0, duration: 0.5, ease: 'back.out(1.2)' });
-      }
-    } catch(e) {}
+    LocalViewCtrl.setState('success');
+  }
+};
+
+// Remote UI Controller
+const RemoteViewCtrl = {
+  setState: (state) => {
+    ['input', 'progress', 'success', 'error'].forEach(s => {
+      const el = document.getElementById(`remote-view-${s}`);
+      if (el) el.style.display = (s === state) ? 'flex' : 'none';
+    });
+  },
+  updateProgress: (msg) => {
+    const sub = document.getElementById('remote-progress-sub');
+    if (sub) sub.textContent = msg;
+  },
+  showError: (msg) => {
+    const errEl = document.getElementById('remote-error-message');
+    if (errEl) errEl.textContent = msg;
+    RemoteViewCtrl.setState('error');
+  },
+  showSuccess: (filename) => {
+    const nameEl = document.getElementById('remote-success-filename');
+    if (nameEl) nameEl.textContent = filename;
+    RemoteViewCtrl.setState('success');
   }
 };
 
@@ -477,6 +565,7 @@ function navigate(route) {
 
 document.querySelectorAll('[data-nav]').forEach(btn => btn.addEventListener('click', () => navigate(btn.dataset.nav)));
 
+// --- Local File Processing ---
 async function* getFilesRecursively(dirHandle, path = '') {
   for await (const entry of dirHandle.values()) {
     if (entry.kind === 'directory') {
@@ -491,13 +580,13 @@ async function* getFilesRecursively(dirHandle, path = '') {
   }
 }
 
-async function processDirectory() {
+async function processLocalDirectory() {
   try {
     const dirHandle = await window.showDirectoryPicker();
     AppState.activeDirName = dirHandle.name;
     
-    ViewCtrl.setState('progress');
-    ViewCtrl.updateProgress('Scanning directory tree...', 0.1);
+    LocalViewCtrl.setState('progress');
+    LocalViewCtrl.updateProgress('Scanning directory tree...', 0.1);
 
     let combinedText = `=================================================================\n`;
     combinedText += `Repository: ${dirHandle.name} (Local Compilation)\n`;
@@ -508,7 +597,6 @@ async function processDirectory() {
     let fileCount = 0;
     let skipped = 0;
     let truncated = false;
-    let bytesProcessed = 0;
 
     const fileEntries = [];
     for await (const fileObj of getFilesRecursively(dirHandle)) {
@@ -521,7 +609,7 @@ async function processDirectory() {
       const { handle, path } = fileEntries[i];
       
       if (i % 10 === 0) {
-        ViewCtrl.updateProgress(`Processing ${path}...`, 0.2 + ((i / total) * 0.7));
+        LocalViewCtrl.updateProgress(`Processing ${path}...`, 0.2 + ((i / total) * 0.7));
         await new Promise(resolve => setTimeout(resolve, 0)); 
       }
 
@@ -538,20 +626,18 @@ async function processDirectory() {
         combinedText += `\n\n--- FILE: ${path} ---\n\n`;
         combinedText += text;
         
-        bytesProcessed += file.size;
         fileCount++;
       } catch (err) {
-        console.warn(`Could not read ${path}`, err);
         skipped++;
       }
     }
 
-    ViewCtrl.updateProgress('Constructing payload...', 0.95);
+    LocalViewCtrl.updateProgress('Constructing payload...', 0.95);
     await new Promise(resolve => setTimeout(resolve, 100)); 
 
     AppState.activeBlob = new Blob([combinedText], { type: 'text/plain;charset=utf-8' });
     
-    ViewCtrl.showSuccess({
+    LocalViewCtrl.showSuccess({
       fileCount,
       skipped,
       truncated,
@@ -560,47 +646,94 @@ async function processDirectory() {
 
   } catch (err) {
     if (err.name !== 'AbortError') {
-      ViewCtrl.showError(`Access Fault: ${err.message}`);
+      LocalViewCtrl.showError(`Access Fault: ${err.message}`);
     } else {
-      ViewCtrl.setState('input'); 
+      LocalViewCtrl.setState('input'); 
     }
   }
 }
 
-const btnSelect = document.getElementById('btn-select-dir');
-if (btnSelect) btnSelect.addEventListener('click', processDirectory);
+// --- Remote File Processing ---
+async function processRemoteDirectory() {
+  const urlInput = document.getElementById('input-repo-url').value.trim();
+  const tokenInput = document.getElementById('input-repo-token').value.trim();
 
-const btnDownload = document.getElementById('btn-download');
-if (btnDownload) {
-  btnDownload.addEventListener('click', () => {
-    if (AppState.activeBlob) {
-      const url = URL.createObjectURL(AppState.activeBlob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = `${AppState.activeDirName}_local_pack.txt`;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+  if (!urlInput) {
+    RemoteViewCtrl.showError('Repository target identifier required.');
+    return;
+  }
+
+  let owner, repo;
+  try {
+    let cleanUrl = urlInput.replace(/^https?:\/\//, '').replace('github.com/', '');
+    const parts = cleanUrl.split('/').filter(Boolean);
+    owner = parts[0];
+    repo = parts[1];
+    if (!owner || !repo) throw new Error('Invalid structure');
+  } catch (e) {
+    RemoteViewCtrl.showError('Invalid format. Provide owner/repo or full GitHub URL.');
+    return;
+  }
+
+  RemoteViewCtrl.setState('progress');
+  RemoteViewCtrl.updateProgress('Resolving target...');
+
+  try {
+    const query = tokenInput ? `?token=${encodeURIComponent(tokenInput)}` : '';
+    const fetchUrl = `${RAILWAY_PROXY_URL}/api/pack/${owner}/${repo}${query}`;
+
+    const response = await fetch(fetchUrl);
+    
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP Fault ${response.status}`);
     }
-  });
+
+    RemoteViewCtrl.updateProgress('Downloading compiled stream...');
+
+    const blob = await response.blob();
+    AppState.activeBlob = blob;
+    AppState.activeDirName = `${owner}_${repo}`;
+
+    RemoteViewCtrl.showSuccess(`${owner}_${repo}_pack.txt`);
+
+  } catch (err) {
+    RemoteViewCtrl.showError(`Stream Fault: ${err.message}`);
+  }
 }
 
-const resetFlow = () => {
-  AppState.activeBlob = null;
-  ViewCtrl.setState('input');
+// --- General Bindings ---
+const triggerDownload = () => {
+  if (AppState.activeBlob) {
+    const url = URL.createObjectURL(AppState.activeBlob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = `${AppState.activeDirName}_pack.txt`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+  }
 };
 
-const btnReset = document.getElementById('btn-reset');
-if (btnReset) btnReset.addEventListener('click', resetFlow);
+const resetLocal = () => { AppState.activeBlob = null; LocalViewCtrl.setState('input'); };
+const resetRemote = () => { AppState.activeBlob = null; RemoteViewCtrl.setState('input'); };
 
-const btnResetError = document.getElementById('btn-reset-error');
-if (btnResetError) btnResetError.addEventListener('click', resetFlow);
+document.getElementById('btn-select-dir')?.addEventListener('click', processLocalDirectory);
+document.getElementById('btn-download')?.addEventListener('click', triggerDownload);
+document.getElementById('btn-reset')?.addEventListener('click', resetLocal);
+document.getElementById('btn-reset-error')?.addEventListener('click', resetLocal);
+
+document.getElementById('btn-fetch-remote')?.addEventListener('click', processRemoteDirectory);
+document.getElementById('btn-download-remote')?.addEventListener('click', triggerDownload);
+document.getElementById('btn-reset-remote')?.addEventListener('click', resetRemote);
+document.getElementById('btn-reset-remote-error')?.addEventListener('click', resetRemote);
 
 window.onload = () => {
   setupUI();
   try { buildWebGL(); } catch(e) { console.warn('WebGL bypassed.'); }
-  ViewCtrl.setState('input');
+  LocalViewCtrl.setState('input');
+  RemoteViewCtrl.setState('input');
 };
 </script>
 </body>
