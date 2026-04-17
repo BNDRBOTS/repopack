@@ -1,5 +1,5 @@
 {
-  "name": "repo-pack-core",
+  "name": "repo-pack-main",
   "version": "1.0.0",
   "description": "Production-grade proxy streaming service for Repo Pack. Bypasses client memory bounds and network CORS restrictions.",
   "main": "server.js",
