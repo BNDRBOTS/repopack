@@ -1,7 +1,7 @@
 // ==============================================================================
 // BACKEND PROXY: STREAMING SERVICE
 // ==============================================================================
-// Bypasses browser memory limits for multi-gigabyte repositories. 
+// Bypasses browser memory limits for multi-gigabyte repositories.
 // O(1) memory footprint during stream.
 
 require('dotenv').config();
@@ -10,34 +10,68 @@ const cors = require('cors');
 const axios = require('axios');
 const unzipper = require('unzipper');
 const path = require('path');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*';
-app.use(cors({ origin: allowedOrigins }));
+// --- CORS: explicit allowlist, no open wildcard default ---
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : [];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow server-to-server (no origin) or explicitly listed origins only
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS blocked: ${origin}`));
+    }
+  }
+}));
+
 app.use(express.json());
 
+// --- PROXY SHARED SECRET: optional second layer against abuse ---
+const PROXY_SECRET = process.env.PROXY_SECRET || null;
+
 const EXCLUDED_EXTENSIONS = new Set([
-  'png', 'jpg', 'jpeg', 'gif', 'ico', 'svg', 'webp', 
-  'mp4', 'webm', 'ogg', 'mp3', 'wav', 
+  'png', 'jpg', 'jpeg', 'gif', 'ico', 'svg', 'webp',
+  'mp4', 'webm', 'ogg', 'mp3', 'wav',
   'ttf', 'otf', 'woff', 'woff2', 'eot',
   'zip', 'tar', 'gz', '7z', 'rar',
   'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
   'exe', 'dll', 'so', 'dylib', 'bin', 'wasm'
 ]);
 
+// --- SHARED SECRET MIDDLEWARE ---
+function checkProxySecret(req, res, next) {
+  if (!PROXY_SECRET) return next(); // not configured = open (log warning at boot)
+  const provided = req.headers['x-proxy-secret'];
+  // Constant-time compare to prevent timing attacks
+  const valid =
+    provided &&
+    provided.length === PROXY_SECRET.length &&
+    crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(PROXY_SECRET));
+  if (!valid) {
+    return res.status(401).json({ error: 'Unauthorized.' });
+  }
+  next();
+}
+
 app.get('/api/health', (req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ state: 'operational', timestamp: new Date().toISOString() }));
 });
 
-app.get('/api/pack/:owner/:repo', async (req, res) => {
+app.post('/api/pack/:owner/:repo', checkProxySecret, async (req, res) => {
   const { owner, repo } = req.params;
-  const clientToken = req.query.token;
-  
+
+  // --- TOKEN: from POST body only, never query string ---
+  const clientToken = req.body?.token || null;
   const token = clientToken || process.env.GITHUB_PAT;
-  
+
   const apiUrl = `https://api.github.com/repos/${owner}/${repo}/zipball`;
   const headers = {
     'Accept': 'application/vnd.github.v3+json',
@@ -48,14 +82,22 @@ app.get('/api/pack/:owner/:repo', async (req, res) => {
     headers['Authorization'] = `token ${token}`;
   }
 
+  // --- REQUEST TIMEOUT: 30s connect, 120s total download ---
+  const controller = new AbortController();
+  const connectTimeout = setTimeout(() => controller.abort(), 30000);
+
   try {
     const response = await axios({
       method: 'get',
       url: apiUrl,
       responseType: 'stream',
       headers,
-      maxRedirects: 5
+      maxRedirects: 5,
+      timeout: 120000,
+      signal: controller.signal
     });
+
+    clearTimeout(connectTimeout);
 
     res.setHeader('Content-Disposition', `attachment; filename="${owner}_${repo}_pack.txt"`);
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -72,17 +114,18 @@ app.get('/api/pack/:owner/:repo', async (req, res) => {
 
     const zipStream = response.data.pipe(unzipper.Parse({ forceStream: true }));
 
-    zipStream.on('entry', async (entry) => {
+    // --- BACKPRESSURE: pause zip stream when response buffer is full ---
+    zipStream.on('entry', (entry) => {
       const fileName = entry.path;
-      const type = entry.type; 
-      
+      const type = entry.type;
+
       if (type === 'Directory') {
         entry.autodrain();
         return;
       }
 
       const pathParts = fileName.split('/');
-      pathParts.shift(); 
+      pathParts.shift();
       const relativePath = pathParts.join('/');
 
       if (!relativePath) {
@@ -98,27 +141,23 @@ app.get('/api/pack/:owner/:repo', async (req, res) => {
         return;
       }
 
-      try {
-        res.write(`\n\n--- FILE: ${relativePath} ---\n\n`);
-        
-        entry.on('data', (chunk) => {
-          res.write(chunk);
-        });
+      res.write(`\n\n--- FILE: ${relativePath} ---\n\n`);
 
-        entry.on('end', () => {
-          fileCount++;
-        });
+      // Pipe with backpressure: pause zip if response buffer is full
+      const canContinue = entry.pipe(res, { end: false });
 
-        entry.on('error', (err) => {
-          console.error(`[STREAM ERROR] File: ${relativePath}`, err);
-          res.write(`\n[ERROR READING FILE: ${err.message}]\n`);
-          skippedCount++;
-        });
-
-      } catch (err) {
-        skippedCount++;
-        entry.autodrain();
+      if (!canContinue) {
+        zipStream.pause();
+        res.once('drain', () => zipStream.resume());
       }
+
+      entry.on('end', () => fileCount++);
+
+      entry.on('error', (err) => {
+        console.error(`[STREAM ERROR] File: ${relativePath}`, err);
+        res.write(`\n[ERROR READING FILE: ${err.message}]\n`);
+        skippedCount++;
+      });
     });
 
     zipStream.on('close', () => {
@@ -139,20 +178,25 @@ app.get('/api/pack/:owner/:repo', async (req, res) => {
     });
 
   } catch (error) {
+    clearTimeout(connectTimeout);
     console.error('[FETCH ERROR]', error.message);
+
     if (!res.headersSent) {
       let code = 500;
       let message = 'Failed to fetch repository. Verify it is public and the URL is correct.';
-      
+
       const errStr = String(error.message);
-      if (errStr.includes('403')) {
+      if (error.name === 'AbortError' || errStr.includes('aborted')) {
+        code = 504;
+        message = 'GitHub connection timed out. Try again.';
+      } else if (errStr.includes('403')) {
         code = 403;
         message = 'GitHub API limit exceeded. Provide a PAT in settings.';
       } else if (errStr.includes('404')) {
         code = 404;
         message = 'Repository not found. Check spelling or visibility.';
       }
-      
+
       res.writeHead(code, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: message, details: error.message }));
     } else {
@@ -164,6 +208,12 @@ app.get('/api/pack/:owner/:repo', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`[MAIN] Streaming Backend active on port ${PORT}`);
   if (!process.env.GITHUB_PAT) {
-    console.warn(`[WARN] GITHUB_PAT is missing. Global 60 req/hr unauthenticated limit applies.`);
+    console.warn(`[WARN] GITHUB_PAT missing. Global 60 req/hr unauthenticated limit applies.`);
+  }
+  if (!process.env.ALLOWED_ORIGINS) {
+    console.warn(`[WARN] ALLOWED_ORIGINS not set. All cross-origin requests are BLOCKED. Set this in Railway env vars.`);
+  }
+  if (!PROXY_SECRET) {
+    console.warn(`[WARN] PROXY_SECRET not set. Proxy endpoint is unauthenticated.`);
   }
 });
