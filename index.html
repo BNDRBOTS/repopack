@@ -576,11 +576,12 @@ function navigate(route) {
 document.querySelectorAll('[data-nav]').forEach(btn => btn.addEventListener('click', () => navigate(btn.dataset.nav)));
 
 // --- Local File Processing ---
-async function* getFilesRecursively(dirHandle, path = '') {
+async function* getFilesRecursively(dirHandle, path = '', depth = 0) {
+  if (depth > 20) return; // hard cap — prevents symlink loops and pathological trees
   for await (const entry of dirHandle.values()) {
     if (entry.kind === 'directory') {
       if (EXCLUDED_DIRS.has(entry.name)) continue;
-      yield* getFilesRecursively(entry, `${path}${entry.name}/`);
+      yield* getFilesRecursively(entry, `${path}${entry.name}/`, depth + 1);
     } else if (entry.kind === 'file') {
       const ext = entry.name.split('.').pop().toLowerCase();
       if (!EXCLUDED_EXTENSIONS.has(ext)) {
