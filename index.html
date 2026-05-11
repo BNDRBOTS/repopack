@@ -281,9 +281,34 @@
 // ============================================================================
 // DYNAMIC CONSTANTS (Bypass environment markdown collisions)
 // ============================================================================
+const BOM = '\uFEFF';
 const BT = String.fromCharCode(96);
 const FENCE = BT + BT + BT;
 const FENCE_EOF = FENCE + 'eof';
+
+// ============================================================================
+// SANITISATION HELPERS
+// ============================================================================
+function stripBOM(str) { return str.startsWith(BOM) ? str.slice(1) : str; }
+
+function isBinaryContent(text) {
+  const len = Math.min(text.length, 16384);
+  let nonPrintable = 0;
+  for (let i = 0; i < len; i++) {
+    const c = text.charCodeAt(i);
+    if (c < 9 || (c > 13 && c < 32) || (c > 126 && c < 160)) nonPrintable++;
+  }
+  return nonPrintable / len > 0.05;
+}
+
+function sanitizePath(p) {
+  if (!p) return 'unnamed.txt';
+  // Remove traversal patterns but preserve internal double dots (e.g., config..json)
+  p = p.replace(/\.\.\//g, '').replace(/\.\.\\/g, '').replace(/^\.\.(?=[\/\\])/, '');
+  p = p.replace(/^[\/\\]+/, '').replace(/[<>:"|?*\\]/g, '_');
+  p = p.replace(/\/+/g, '/').trim();
+  return p || 'unnamed.txt';
+}
 
 // ============================================================================
 // APP STATE
@@ -413,7 +438,8 @@ const isValidPath = (p) => {
   if (!p || p.length === 0 || p.length > 255) return false;
   if (p.includes(' ') && p.split(' ').length > 2) return false;
   const hasExt = p.includes('.');
-  const isSpecial = ['Dockerfile', 'Makefile', 'LICENSE', '.env', '.gitignore'].includes(p.trim().split('/').pop());
+  // Expanded list of special extensionless files
+  const isSpecial = ['Dockerfile', 'Makefile', 'Gemfile', 'Procfile', 'Rakefile', 'LICENSE', 'README', '.env', '.gitignore', '.env.example', 'go.mod', 'go.sum', 'yarn.lock'].includes(p.trim().split('/').pop());
   if (!hasExt && !isSpecial) return false;
   return /^[a-zA-Z0-9_\-\.\/@ ]+$/.test(p);
 };
@@ -459,7 +485,7 @@ function extractPathInfo(line) {
 
   if (/^[a-zA-Z0-9_\-\.\/@]+\.[a-zA-Z0-9]+$/.test(clean)) {
     const ext = clean.split('.').pop().toLowerCase();
-    const knownExts = ['js','ts','jsx','tsx','html','css','json','md','py','java','c','cpp','txt','env','example','yml','yaml','sh','rb','php','go','rs','sql','xml','csv'];
+    const knownExts = ['js','ts','jsx','tsx','html','css','json','md','py','java','c','cpp','txt','env','example','yml','yaml','sh','rb','php','go','rs','sql','xml','csv','toml','lock','mod','sum'];
     if (clean.includes('/') || knownExts.includes(ext)) {
       return { path: clean, type: 'IMPLICIT' };
     }
@@ -468,30 +494,76 @@ function extractPathInfo(line) {
   return null;
 }
 
-// Deep Heuristic Inference (Used when AI chat exporter strips the file paths)
+// Deep Heuristic Inference (Used when no explicit path is found)
 function guessFileName(content, index) {
   const text = content.toLowerCase();
-  
-  // Try to pull a path from the first 5 lines directly
-  const firstLines = content.split('\n').slice(0, 5).join(' ');
-  const implicitPathMatch = firstLines.match(/(?:src|app|public|components|lib|utils|server|pages)\/[a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+/i);
-  if (implicitPathMatch) return implicitPathMatch[0];
+  const firstLine = content.split('\n')[0]?.trim() || '';
+  const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-  if (text.includes('<!doctype html>') || text.includes('<html')) return `public/index_${index}.html`;
-  if (text.includes('"name":') && text.includes('"version":') && text.includes('"dependencies":')) return `package.json`;
-  if (text.includes('railway.schema.json') || text.includes('"builder": "nixpacks"')) return `railway.json`;
-  if (text.includes('github_pat=') || text.includes('allowed_origins=')) return `.env`;
-  if (text.includes('node_modules') && text.includes('dist')) return `.gitignore`;
-  if (text.includes('import react') || text.includes('from "react"')) return `src/components/Component_${index}.jsx`;
-  if (text.includes('express()') || text.includes('require(')) return `src/server_${index}.js`;
-  if (text.includes('def ') && text.includes('import ')) return `src/main_${index}.py`;
-  if (text.includes('font-family:') || text.includes('margin:')) return `public/style_${index}.css`;
-  if (text.includes('# repopack') || text.includes('getting started')) return `README.md`;
-  
-  return `extracted/module_${index}.txt`;
+  // 1. Full HTML document → index.html
+  if (text.includes('<!doctype html>') || text.includes('<html')) {
+    return 'index.html';
+  }
+
+  // 2. Express/Node server → server.js
+  if (text.includes('require(') && (text.includes('express') || text.includes('app.listen'))) {
+    return 'server.js';
+  }
+
+  // 3. package.json (strict match)
+  if (text.includes('"name":') && text.includes('"version":') && text.includes('"dependencies":')) {
+    return 'package.json';
+  }
+
+  // 4. railway.json detection
+  if (text.includes('railway.schema.json') || text.includes('"build":') && text.includes('"deploy":')) {
+    // attempt to parse JSON to be safe
+    try { JSON.parse(content.trim()); return 'railway.json'; } catch(e) {}
+  }
+
+  // 5. .gitignore style (lines of path-like strings, very few spaces, no obvious code)
+  const pathLikeCount = lines.filter(l => /^[a-zA-Z0-9_\-\.\/\*]+$/.test(l) && !l.includes(' ')).length;
+  if (pathLikeCount > 0.6 * lines.length && lines.length > 5) {
+    return '.gitignore';
+  }
+
+  // 6. Environment file (KEY=VALUE pattern)
+  const envLineCount = lines.filter(l => l.includes('=') && !l.startsWith('//') && !l.startsWith('#')).length;
+  if (envLineCount > 0.4 * lines.length && lines.length > 3) {
+    // check for placeholder values (your_, example, etc.)
+    const isExample = text.includes('your_') || text.includes('example') || text.includes('placeholder');
+    return isExample ? '.env.example' : '.env';
+  }
+
+  // 7. README
+  if (text.includes('getting started') || firstLine.startsWith('# repopack') || firstLine.startsWith('# ')) {
+    return 'README.md';
+  }
+
+  // 8. Implicit path from first line comment (// server.js, # main.py, etc.)
+  const pathFromComment = firstLine.match(/(?:\/\/|#)\s*([a-zA-Z0-9_\-\.\/]+\.[a-zA-Z0-9]+)/);
+  if (pathFromComment && isValidPath(pathFromComment[1])) {
+    return sanitizePath(pathFromComment[1]);
+  }
+
+  // 9. Language detection for numbered fallback
+  let ext = 'txt';
+  if (text.includes('import ') || text.includes('require(') || text.includes('function ') || text.includes('const ')) ext = 'js';
+  else if (text.includes('<html') || text.includes('<!doctype')) ext = 'html';
+  else if (text.startsWith('{') && text.endsWith('}')) {
+    try { JSON.parse(content.trim()); ext = 'json'; } catch(e) {}
+  } else if (text.includes('{') && text.includes('}') && (text.includes('margin') || text.includes('font'))) ext = 'css';
+
+  return `module_${index}.${ext}`;
 }
 
 function forensicExtract(text) {
+  // Binary‑first pipeline
+  text = stripBOM(text);
+  if (text.slice(0, 65536).includes('\0') || isBinaryContent(text)) {
+    return [{ path: 'payload.bin', content: btoa(unescape(encodeURIComponent(text))) }];
+  }
+
   const lines = text.split(/\r?\n/);
   const files = [];
   let currentFile = null;
@@ -503,7 +575,7 @@ function forensicExtract(text) {
     while(buffer.length > 0 && buffer[buffer.length - 1].trim() === '') buffer.pop();
     while(buffer.length > 0 && buffer[0].trim() === '') buffer.shift();
     if (buffer.length > 0) {
-      files.push({ path: currentFile, content: buffer.join('\n') });
+      files.push({ path: sanitizePath(currentFile), content: buffer.join('\n') });
     }
   };
 
@@ -519,7 +591,7 @@ function forensicExtract(text) {
 
     if (!currentFile) {
       if (pathInfo) {
-        currentFile = pathInfo.path.replace(/^\/+/, '');
+        currentFile = sanitizePath(pathInfo.path.replace(/^\/+/, ''));
         currentType = pathInfo.type;
         buffer = [];
       } else if (isMajorDivider || isDashDivider) {
@@ -546,11 +618,11 @@ function forensicExtract(text) {
       } else {
         if (pathInfo && pathInfo.path !== currentFile) {
           if (currentFile.startsWith('UNKNOWN_BLOCK_') && buffer.length < 15) {
-            currentFile = pathInfo.path.replace(/^\/+/, '');
+            currentFile = sanitizePath(pathInfo.path.replace(/^\/+/, ''));
             currentType = pathInfo.type;
           } else {
             flushBuffer();
-            currentFile = pathInfo.path.replace(/^\/+/, '');
+            currentFile = sanitizePath(pathInfo.path.replace(/^\/+/, ''));
             currentType = pathInfo.type;
             buffer = [];
           }
@@ -574,6 +646,11 @@ function forensicExtract(text) {
       f.path = guessFileName(f.content, unkCount++);
     }
     finalFiles.push(f);
+  }
+
+  // Whole‑payload fallback: if nothing extracted, return as single payload.txt
+  if (finalFiles.length === 0) {
+    finalFiles.push({ path: 'payload.txt', content: text });
   }
 
   return finalFiles;
